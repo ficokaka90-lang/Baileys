@@ -1,5 +1,6 @@
 import { Boom } from '@hapi/boom'
 import { createHash, randomBytes } from 'crypto'
+import type Long from 'long'
 import { proto } from '../../WAProto/index.js'
 const baileysVersion = [2, 3000, 1035086371]
 import type {
@@ -424,6 +425,15 @@ export const getCallStatusFromNode = ({ tag, attrs }: BinaryNode) => {
 				status = 'terminate'
 			}
 
+			break
+		case 'preaccept':
+			status = 'preaccept'
+			break
+		case 'transport':
+			status = 'transport'
+			break
+		case 'relaylatency':
+			status = 'relaylatency'
 			break
 		case 'reject':
 			status = 'reject'
