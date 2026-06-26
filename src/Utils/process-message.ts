@@ -408,6 +408,7 @@ const processMessage = async (
 					await storeTcTokensFromHistorySync(data.chats, signalRepository, keyStore, logger)
 
 					if (data.nctSalt?.length) {
+						logger?.info('nctSalt received from history sync')
 						ev.emit('creds.update', { nctSalt: data.nctSalt })
 					}
 

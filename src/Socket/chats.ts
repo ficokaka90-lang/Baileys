@@ -730,6 +730,24 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		}
 	)
 
+	// The NCT salt (used to compute cstoken) is delivered via the regular_high app-state
+	// collection, which a full app-state sync only fetches after history sync. When history
+	// sync is disabled, skipped, or times out, fetch regular_high on its own so cstoken works.
+	let nctSaltSyncInFlight = false
+	const ensureNctSaltSynced = () => {
+		if (authState.creds.nctSalt?.length || nctSaltSyncInFlight) {
+			return
+		}
+
+		nctSaltSyncInFlight = true
+		logger.info('no NCT salt stored — syncing regular_high to fetch it')
+		resyncAppState(['regular_high'], true)
+			.catch(error => onUnexpectedError(error, 'nct salt regular_high resync'))
+			.finally(() => {
+				nctSaltSyncInFlight = false
+			})
+	}
+
 	/**
 	 * fetch the profile picture of a user/group
 	 * type = "preview" for a low res picture
@@ -1395,6 +1413,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			logger.info('History sync is disabled by config, not waiting for notification. Transitioning to Online.')
 			syncState = SyncState.Online
 			setTimeout(() => ev.flush(), 0)
+			ensureNctSaltSynced()
 			return
 		}
 
@@ -1405,6 +1424,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			logger.info('Reconnection with existing sync data, skipping history sync wait. Transitioning to Online.')
 			syncState = SyncState.Online
 			setTimeout(() => ev.flush(), 0)
+			ensureNctSaltSynced()
 			return
 		}
 
@@ -1425,6 +1445,8 @@ export const makeChatsSocket = (config: SocketConfig) => {
 				// regardless of the state machine phase.
 				const accountSyncCounter = (authState.creds.accountSyncCounter || 0) + 1
 				ev.emit('creds.update', { accountSyncCounter })
+
+				ensureNctSaltSynced()
 			}
 		}, 20_000)
 	})
