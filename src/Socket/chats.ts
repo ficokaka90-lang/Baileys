@@ -734,18 +734,28 @@ export const makeChatsSocket = (config: SocketConfig) => {
 	// collection, which a full app-state sync only fetches after history sync. When history
 	// sync is disabled, skipped, or times out, fetch regular_high on its own so cstoken works.
 	let nctSaltSyncInFlight = false
-	const ensureNctSaltSynced = () => {
+	const ensureNctSaltSynced = async () => {
 		if (authState.creds.nctSalt?.length || nctSaltSyncInFlight) {
 			return
 		}
 
 		nctSaltSyncInFlight = true
-		logger.info('no NCT salt stored — syncing regular_high to fetch it')
-		resyncAppState(['regular_high'], true)
-			.catch(error => onUnexpectedError(error, 'nct salt regular_high resync'))
-			.finally(() => {
-				nctSaltSyncInFlight = false
-			})
+		try {
+			// The salt may legitimately be absent. Only fetch regular_high if it was never synced:
+			// once it has a persisted version, the salt simply isn't provided for this account, so
+			// re-fetching on every reconnect/timeout won't help (and would loop forever).
+			const { regular_high: state } = await authState.keys.get('app-state-sync-version', ['regular_high'])
+			if (state?.version) {
+				return
+			}
+
+			logger.info('no NCT salt stored — syncing regular_high to fetch it')
+			await resyncAppState(['regular_high'], false)
+		} catch (error) {
+			onUnexpectedError(error as Error, 'nct salt regular_high resync')
+		} finally {
+			nctSaltSyncInFlight = false
+		}
 	}
 
 	/**
@@ -1413,7 +1423,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			logger.info('History sync is disabled by config, not waiting for notification. Transitioning to Online.')
 			syncState = SyncState.Online
 			setTimeout(() => ev.flush(), 0)
-			ensureNctSaltSynced()
+			void ensureNctSaltSynced()
 			return
 		}
 
@@ -1424,7 +1434,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			logger.info('Reconnection with existing sync data, skipping history sync wait. Transitioning to Online.')
 			syncState = SyncState.Online
 			setTimeout(() => ev.flush(), 0)
-			ensureNctSaltSynced()
+			void ensureNctSaltSynced()
 			return
 		}
 
@@ -1446,7 +1456,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 				const accountSyncCounter = (authState.creds.accountSyncCounter || 0) + 1
 				ev.emit('creds.update', { accountSyncCounter })
 
-				ensureNctSaltSynced()
+				void ensureNctSaltSynced()
 			}
 		}, 20_000)
 	})
