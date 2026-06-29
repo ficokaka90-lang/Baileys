@@ -1,5 +1,5 @@
 {
-  "name": "@anakmakloh_binance",
+  "name": "Lyntharx/bail",
   "type": "module",
   "version": "7.0.0-rc13",
   "description": "A WebSockets library for interacting with WhatsApp Web",
